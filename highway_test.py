@@ -157,3 +157,28 @@ def speed_limit():
     zero_vec = np.ones([64, 10]) *speed
     graph.compile(optimizer='rmsprop', loss={'output':'mse', 'reconstruction':'mse'})
     history = graph.fit({'input':X_train, 'output':X_train, 'reconstruction': zero_vec}, nb_epoch=10)
+
+
+
+
+def custom_fun(X):
+    from keras.objectives import mean_squared_error as mse
+    print X.keys()
+    return mse(X['proj'], X['lstm'])
+
+graph = Graph()
+graph.add_input(name='input', input_shape=[10, 39])
+graph.add_node(TimeDistributedDense(7), name='proj', input='input')
+
+graph.add_node(LSTM(7, return_sequences=True), name='lstm', input='proj')
+graph.add_node(Lambda(custom_fun, output_shape=[10, 7]), merge_mode = 'join', name = 'diff', inputs=['proj','lstm'])
+graph.add_output(name = 'reconstruction', input='diff')
+
+graph.add_node(TimeDistributedDense(39), name='proj2', input='lstm')
+graph.add_output(name='output', input='proj2')
+
+speed = 0
+X_train = np.random.rand(64, 10, 39)
+zero_vec = np.ones([64, 10]) *speed
+graph.compile(optimizer='rmsprop', loss={'output':'mse', 'reconstruction':'mse'})
+history = graph.fit({'input':X_train, 'output':X_train, 'reconstruction': zero_vec}, nb_epoch=10)
