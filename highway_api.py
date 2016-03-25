@@ -10,10 +10,10 @@ from keras.layers.recurrent import LSTM, GRU, SimpleRNN
 from keras.models import Sequential, Graph
 
 
-n_raw_dim = 39#39
-n_max_dur = 400#10
-n_feat_dim = 100#7
-n_batch_size = 5000#64
+n_raw_dim = 39
+n_max_dur = 10
+n_feat_dim = 7
+n_batch_size = 64
 
 loss = []
 
