@@ -1,18 +1,29 @@
-from parser import get_X, get_y
+from parser import Ark, Label
 from highway import *
 
-ark_path = 'global_phone_feats/train.39.cmvn.ark'
-label_path = 'global_phone_feats/train_query1_label'
-X_train, utt_list, max_dur, normalizer = get_X(ark_path)
-y_train, utt_list =  get_y(label_path)
+train_ark_path = 'global_phone_feats/train.39.cmvn.ark'
+train_label_path = 'global_phone_feats/train_query1_label'
+test_ark_path = 'global_phone_feats/test.39.cmvn.ark'
+test_label_path = 'global_phone_feats/test_query1_label'
+dev_ark_path = 'global_phone_feats/dev.39.cmvn.ark'
+dev_label_path = 'global_phone_feats/dev_query1_label'
 
 
+train_ark = Ark(train_ark_path)
+train_label  = Label(train_label_path)
 
-n_raw_dim = 39
-n_max_dur = 10
-n_feat_dim = 7
-n_batch_size = 64
+test_ark = Ark(test_ark_path, max_dur = train_ark.nT, normalizer = train_ark.normalizer)
+test_label  = Label(test_label_path)
 
+dev_ark = Ark(dev_ark_path, max_dur = train_ark.nT, normalizer = train_ark.normalizer)
+dev_label  = Label(dev_label_path)
+
+
+n_raw_dim = train_ark.nF
+n_max_dur = train_ark.nT
+n_feat_dim = 100
+n_batch_size = 50
+'''
 loss = []
 
 graph = Graph()
@@ -44,3 +55,4 @@ history = graph.fit(get_xyio({'input':X_train, 'output':y_train}, 0), nb_epoch=1
 
 print graph.nodes.keys()
 print graph.outputs.keys()
+'''
