@@ -103,7 +103,7 @@ class RestrictedRNN(object):
         
         self.rnn_layer.append(layer_name)
         self.layer_type[layer_name] = self.rnn_type
-        self.layer_con[layer_name] = 'none'
+        self.layer_con[layer_name] = 'output'
 
     def add_rnn(self, layer_name = None, rnn_type = None, connection = None):
         if not connection: 
@@ -195,24 +195,24 @@ class RestrictedRNN(object):
             sys.stdout = Logger(info_path)
         print "=========================================="
         print "graph inputs:"
-        print self.graph.inputs.keys()
+        print '    ', self.graph.inputs.keys()
 
         print "graph rnn_nodes:"
         #print [k for k in self.graph.nodes.keys() if not('diff' in k or 'orig' in k or '|' in k or 'gate' in k)]
         for k in self.rnn_layer:
-            print k, self.layer_type[k], self.layer_con[k]
+            print '    ', k, self.layer_type[k], self.layer_con[k]
         
         print "graph speed_limits:"
-        print [k for k in self.graph.nodes.keys() if 'diff' in k]
+        print '    ', [k for k in self.graph.nodes.keys() if 'diff' in k]
         
         print "graph outputs:"
-        print self.graph.outputs.keys()
+        print '    ', self.graph.outputs.keys()
 
         print "objecives error:"
-        print self.loss
+        print '    ', self.loss
 
         print "objecives weights:"
-        print self.loss_weights
+        print '    ', self.loss_weights
         print "=========================================="
         if info_path:
             sys.stdout = sys_out
