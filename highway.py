@@ -10,6 +10,7 @@ from keras.layers.core import  Activation, AutoEncoder, Dense, TimeDistributedDe
 from keras.layers.recurrent import LSTM, GRU, SimpleRNN
 from keras.models import Sequential, Graph, model_from_yaml 
 import sys
+from keras.callbacks import EarlyStopping, ModelCheckpoint
 
 def fun_speed(inputs):
     from keras.objectives import mean_squared_error as mse
@@ -217,24 +218,24 @@ class RestrictedRNN(object):
         if info_path:
             sys.stdout = sys_out
 
-    def fit(self, train_Xy, val_Xy, nb_epoch = 100, patience = 5):
+    def fit(self, train_Xy, val_Xy, nb_epoch = 100, patience = 5, model_path='model/tmp'):
         X, y = train_Xy
         vX, vy = val_Xy
 
-        from keras.callbacks import EarlyStopping
         early_stopping = EarlyStopping(monitor='val_loss', patience=patience)
+        model_checkpoint = ModelCheckpoint(filepath=model_path, save_best_only=True, verbose=1)
 
         xyio_dict = self.get_xyio({'input':X, 'output':y}, X.shape[0])
         xyval_dict = self.get_xyio({'input':vX, 'output':vy}, vX.shape[0])
-        self.history = self.graph.fit(xyio_dict, validation_data = xyval_dict, nb_epoch=nb_epoch, callbacks=[early_stopping])
+        self.history = self.graph.fit(xyio_dict, validation_data = xyval_dict, nb_epoch=nb_epoch, callbacks=[model_checkpoint, early_stopping])
     
     def save(self, model_path):
         self.print_graph(model_path+'.txt')
         self.graph.save_weights(model_path)
         
     def load(self, model_path):
-        with open(model_path+'.txt','r') as f:
-            for line in f: print line.strip()
+        #with open(model_path+'.txt','r') as f:
+        #    for line in f: print line.strip()
         self.graph.load_weights(model_path) 
 
 

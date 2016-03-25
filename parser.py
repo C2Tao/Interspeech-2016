@@ -107,27 +107,6 @@ class Label(object):
 if __name__=='__main__':
     ark_path = 'global_phone_feats/train.39.cmvn.ark'
     label_path = 'global_phone_feats/train_query1_label'
-    '''
-    feat = parse_ark(ark_path)
-    print parse_label(label_path).items()[:5] 
-    (nU, nT, nF), (u, v, d) = get_dims(feat)
-    print u, v
-    X0,_ = pad_feats(feat, nT)
-    X1,_ = pad_feats(feat, 100)
-    X2,_ = pad_feats(feat)
-    print X0.shape, X1.shape, X2.shape
-    normalize(X0)
-    x = np.array([ [[1,1],[2,2],[3,3]] , [[4,-4],[5,-5], [6,-6]]  ])    
-    y = np.array([ [[1,1],[3,3]] , [[4,-4],[5,-5]]  ])    
-    nx,norm = normalize(x)
-    print x
-    print nx 
-    ny,norm = normalize(y,norm)
-    print ny
-    '''
-    #X, utt_list_x, max_dur, normalizer = get_X(ark_path)
-    #y, utt_list_y =  get_y(label_path)
-    #assert(utt_list_x==utt_list_y)
     ark  = Ark(ark_path)
     label  = Ark(label_path)
     
