@@ -11,9 +11,9 @@ from keras.models import Sequential, Graph
 
 
 n_raw_dim = 39#39
-n_max_dur = 400#10
-n_feat_dim = 100#7
-n_batch_size = 5000#64
+n_max_dur = 10#400
+n_feat_dim = 7#100
+n_batch_size = 64#5000
 
 loss = []
 
@@ -89,35 +89,38 @@ def add_vanilla(graph, rnn, input_name, layer_name):
     graph.add_node(rnn(n_feat_dim, return_sequences=True), name = layer_name, input = input_name)
 
 
-graph = Graph()
-graph.add_input(name='input', input_shape=[n_max_dur, n_raw_dim])
-graph.add_node(TimeDistributedDense(n_feat_dim), name='proj', input='input')
-
-add_highway(graph, LSTM, 'proj', 'lstm')
-
-add_residual(graph, SimpleRNN, 'lstm', 'simple')
-
-add_vanilla(graph, GRU, 'simple', 'gru')
-
-# random constaints
-add_speed_limit(graph, 'proj', 'lstm')
-add_speed_limit(graph, 'proj', 'gru')
-add_speed_limit(graph, 'simple', 'gru')
-#
 
 
+if __name__=='__main__':
+    graph = Graph()
+    graph.add_input(name='input', input_shape=[n_max_dur, n_raw_dim])
+    graph.add_node(TimeDistributedDense(n_feat_dim), name='proj', input='input')
 
-graph.add_node(LSTM(n_feat_dim, return_sequences=False), name = 'top', input = 'gru')
+    add_highway(graph, LSTM, 'proj', 'lstm')
 
-graph.add_node(Dense(1, activation = 'sigmoid'), name = 'final', input = 'top')
-graph.add_output(name='output', input='final')
+    add_residual(graph, SimpleRNN, 'lstm', 'simple')
 
-X_train = np.random.rand(n_batch_size, n_max_dur, n_raw_dim)
-y_train = np.random.randint(2, size = (n_batch_size,) )
+    add_vanilla(graph, GRU, 'simple', 'gru')
 
-graph.compile(optimizer='adam', loss=get_loss({'output':'binary_crossentropy'}))
-history = graph.fit(get_xyio({'input':X_train, 'output':y_train}, 0), nb_epoch=10)
+    # random constaints
+    add_speed_limit(graph, 'proj', 'lstm')
+    add_speed_limit(graph, 'proj', 'gru')
+    add_speed_limit(graph, 'simple', 'gru')
+    #
 
 
-print graph.nodes.keys()
-print graph.outputs.keys()
+
+    graph.add_node(LSTM(n_feat_dim, return_sequences=False), name = 'top', input = 'gru')
+
+    graph.add_node(Dense(1, activation = 'sigmoid'), name = 'final', input = 'top')
+    graph.add_output(name='output', input='final')
+
+    X_train = np.random.rand(n_batch_size, n_max_dur, n_raw_dim)
+    y_train = np.random.randint(2, size = (n_batch_size,) )
+
+    graph.compile(optimizer='adam', loss=get_loss({'output':'binary_crossentropy'}))
+    history = graph.fit(get_xyio({'input':X_train, 'output':y_train}, 0), nb_epoch=10)
+
+
+    print graph.nodes.keys()
+    print graph.outputs.keys()
