@@ -1,3 +1,4 @@
+import cPickle
 from keras.layers import containers, Dropout, LSTM
 import theano
 import theano.tensor as T
@@ -7,8 +8,8 @@ from keras.utils import generic_utils
 import numpy as np
 from keras.layers.core import  Activation, AutoEncoder, Dense, TimeDistributedDense, TimeDistributedMerge, Merge, Lambda
 from keras.layers.recurrent import LSTM, GRU, SimpleRNN
-from keras.models import Sequential, Graph
-
+from keras.models import Sequential, Graph, model_from_yaml 
+import sys
 
 def fun_speed(inputs):
     from keras.objectives import mean_squared_error as mse
@@ -27,9 +28,19 @@ def fun_residual(inputs):
     return inputs[k0] + inputs[k1]
 
 
+class Logger(object):
+    def __init__(self, info_path):
+        self.terminal = sys.stdout
+        self.log = open(info_path, "w")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)  
+
 class RestrictedRNN(object):
-    def __init__(self, rnn, connection, dimensions):
-        self.rnn = rnn
+    def __init__(self, rnn_type, connection, dimensions):
+            
+        self.rnn_type = rnn_type
         self.connection = connection
         
         self.nT = dimensions['nT'] #10#400
@@ -39,8 +50,21 @@ class RestrictedRNN(object):
         self.restriction = []
         self.speed_limit = {}
         self.speed_fine = {}
-        self.graph = Graph()
 
+        self.rnn_layer = []
+        self.layer_type = {}
+        self.layer_con = {}
+
+        self.graph = Graph()
+        
+    def get_rnn(self, rnn_type = None):
+        if not rnn_type: rnn_type = self.rnn_type
+        if rnn_type == 'LSTM':
+            return LSTM
+        elif rnn_type == 'GRU':
+            return GRU
+        elif rnn_type == 'SimpleRNN':
+            return SimpleRNN
 
     def add_speed_limit(self, input_name, layer_name, speed_limit = 0.0, speed_fine = 1.0):
         # force outputs of input_name and layer_name to be similar
@@ -54,19 +78,43 @@ class RestrictedRNN(object):
         self.speed_limit[pair_name] = speed_limit
         self.speed_fine[pair_name] = speed_fine
 
-    def add_input(self, layer_name):
+    def add_input(self, layer_name = None):
+        if not layer_name:
+            layer_name = '_'.join([str(len(self.rnn_layer)), 'dense', 'input'])
+
         self.graph.add_input(name='input', input_shape=[self.nT, self.nF])
         self.graph.add_node(TimeDistributedDense(self.nH), name=layer_name, input='input')
+        
+        self.rnn_layer.append(layer_name)
+        self.layer_type[layer_name] = 'dense'
+        self.layer_con[layer_name] = 'input'
 
-    def add_output(self, layer_name): 
-        self.graph.add_node(self.rnn(self.nH, return_sequences=False), name = 'top', input = layer_name)
-        self.graph.add_node(Dense(1, activation = 'sigmoid'), name = 'final', input = 'top')
+    def add_output(self, layer_name = None, rnn_type = None):
+        if not rnn_type: 
+            rnn_type = self.rnn_type
+        if not layer_name:
+            layer_name = '_'.join([str(len(self.rnn_layer)), rnn_type, 'output'])
+        rnn = self.get_rnn(rnn_type)
+        input_name = self.rnn_layer[-1] 
+        
+        self.graph.add_node(rnn(self.nH, return_sequences=False), name = layer_name, input = input_name)
+        self.graph.add_node(Dense(1, activation = 'sigmoid'), name = 'final', input = layer_name)
         self.graph.add_output(name='output', input='final')
+        
+        self.rnn_layer.append(layer_name)
+        self.layer_type[layer_name] = self.rnn_type
+        self.layer_con[layer_name] = 'none'
 
-    def add_rnn(self, input_name, layer_name, rnn = None, connection = None):
-        if not rnn: rnn = self.rnn
-        if not connection: connection = self.connection
-
+    def add_rnn(self, layer_name = None, rnn_type = None, connection = None):
+        if not connection: 
+            connection = self.connection
+        if not rnn_type: 
+            rnn_type = self.rnn_type
+        if not layer_name:
+            layer_name = '_'.join([str(len(self.rnn_layer)), rnn_type, connection])
+        rnn = self.get_rnn(rnn_type)
+        input_name = self.rnn_layer[-1] 
+       
         if connection == 'highway':
             self.add_highway(input_name, layer_name, rnn)
         elif connection == 'residual':
@@ -74,8 +122,12 @@ class RestrictedRNN(object):
         elif connection == 'vanilla':
             self.add_vanilla(input_name, layer_name, rnn)
         
-    def add_highway(self,  input_name, layer_name, rnn = None):
-        if not rnn: rnn = self.rnn
+        self.rnn_layer.append(layer_name)
+        self.layer_type[layer_name] = rnn_type
+        self.layer_con[layer_name] = connection
+         
+        
+    def add_highway(self,  input_name, layer_name, rnn):
         # x: input_name
         # f(x): rnn_layer_name
         # w(x): gate_layer_name
@@ -88,8 +140,7 @@ class RestrictedRNN(object):
             merge_mode = 'join', name = layer_name, \
             inputs = [input_name, 'orig_' + layer_name, 'gate_' + layer_name])
 
-    def add_residual(self, input_name, layer_name, rnn = None):
-        if not rnn: rnn = self.rnn
+    def add_residual(self, input_name, layer_name, rnn):
         # x: input_name
         # f(x): rnn_layer_name
         # y(x): layer_name
@@ -100,8 +151,7 @@ class RestrictedRNN(object):
             merge_mode = 'join', name = layer_name, \
             inputs = [input_name, 'orig_' + layer_name])
 
-    def add_vanilla(self, input_name, layer_name, rnn = None):
-        if not rnn: rnn = self.rnn
+    def add_vanilla(self, input_name, layer_name, rnn):
         # x: input_name
         # f(x): layer_name
         # y(x) = f(x)
@@ -128,20 +178,29 @@ class RestrictedRNN(object):
     def compile(self):
         self.get_loss()
         self.get_loss_weights()
+        
         self.graph.compile(optimizer='adam', loss = self.loss, loss_weights = self.loss_weights)
+        
+
+        t_in = self.graph.inputs['input'].get_input()
+        t_out = self.graph.outputs['output'].get_output()
+        self.evaluate = theano.function([t_in], t_out, allow_input_downcast=True)
+        
         self.print_graph()
 
-    def fit(self, X, y, nb_epoch):
-        xyio_dict = self.get_xyio({'input':X, 'output':y}, X.shape[0])
-        self.history = self.graph.fit(xyio_dict, nb_epoch=nb_epoch)
     
-    def print_graph(self, opt=None):
+    def print_graph(self, info_path=None):
+        if info_path:
+            sys_out = sys.stdout
+            sys.stdout = Logger(info_path)
         print "=========================================="
         print "graph inputs:"
         print self.graph.inputs.keys()
 
         print "graph rnn_nodes:"
-        print [k for k in self.graph.nodes.keys() if not('diff' in k or 'orig' in k or '|' in k or 'gate' in k)]
+        #print [k for k in self.graph.nodes.keys() if not('diff' in k or 'orig' in k or '|' in k or 'gate' in k)]
+        for k in self.rnn_layer:
+            print k, self.layer_type[k], self.layer_con[k]
         
         print "graph speed_limits:"
         print [k for k in self.graph.nodes.keys() if 'diff' in k]
@@ -155,31 +214,60 @@ class RestrictedRNN(object):
         print "objecives weights:"
         print self.loss_weights
         print "=========================================="
+        if info_path:
+            sys.stdout = sys_out
+
+    def fit(self, train_Xy, val_Xy, nb_epoch = 100, patience = 5):
+        X, y = train_Xy
+        vX, vy = val_Xy
+
+        from keras.callbacks import EarlyStopping
+        early_stopping = EarlyStopping(monitor='val_loss', patience=patience)
+
+        xyio_dict = self.get_xyio({'input':X, 'output':y}, X.shape[0])
+        xyval_dict = self.get_xyio({'input':vX, 'output':vy}, vX.shape[0])
+        self.history = self.graph.fit(xyio_dict, validation_data = xyval_dict, nb_epoch=nb_epoch, callbacks=[early_stopping])
+    
+    def save(self, model_path):
+        self.print_graph(model_path+'.txt')
+        self.graph.save_weights(model_path)
         
+    def load(self, model_path):
+        with open(model_path+'.txt','r') as f:
+            for line in f: print line.strip()
+        self.graph.load_weights(model_path) 
+
 
 if __name__=='__main__':
-    nX = 100
-    dim = {'nT': 71, 'nF': 39, 'nH': 7}
+    nX = 10
+    nV = 2
+    dim = {'nT': 7, 'nF': 3, 'nH': 7}
     X_train = np.random.rand(nX, dim['nT'], dim['nF'])
     y_train = np.random.randint(2, size = (nX,) )
     
-    rrnn = RestrictedRNN(LSTM, 'highway', dim) 
+    X_val = np.random.rand(nV, dim['nT'], dim['nF'])
+    y_val = np.random.randint(2, size = (nV,) )
+    
+    rrnn = RestrictedRNN('LSTM', 'highway', dim) 
     
     rrnn.add_input('proj')
-    rrnn.add_rnn('proj', 'lstm1', LSTM, 'highway')
-    rrnn.add_rnn('lstm1', 'lstm2', SimpleRNN, 'residual')
-    rrnn.add_rnn('lstm2', 'lstm3', GRU, 'vanilla')
-    rrnn.add_rnn('lstm3', 'lstm4')
-    rrnn.add_output('lstm4') 
+    rrnn.add_rnn('lstm1', 'LSTM', 'highway')
+    rrnn.add_rnn('lstm2', 'SimpleRNN', 'residual')
+    rrnn.add_rnn('lstm3', 'GRU', 'vanilla')
+    rrnn.add_rnn('lstm4')
+    rrnn.add_output() 
     
     rrnn.add_speed_limit('proj', 'lstm4', speed_limit = 0, speed_fine =1)
     rrnn.add_speed_limit('lstm1', 'lstm2', speed_fine = -1)
     rrnn.add_speed_limit('lstm2', 'lstm3' )
     
     rrnn.compile()
-    rrnn.fit(X_train, y_train, 10)
-    
+    rrnn.fit((X_train, y_train),(X_val, y_val), 100, 5)
 
+    rrnn.save('test') 
+    rrnn.load('test') 
+
+    print rrnn.evaluate(X_train)
 
 
 
