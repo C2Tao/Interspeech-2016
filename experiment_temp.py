@@ -81,14 +81,14 @@ def eval(rnn, con, lim, nN, nH):
 
     pred = cPickle.load(open('score/'+exp_name+'.test','r')).flatten()
     y = test_y 
-    y = pred 
     fpr, tpr, thresholds = metrics.roc_curve(y, pred, pos_label=1)
     auc = metrics.auc(fpr, tpr)
     print auc
 
-for rnn in ['SimpleRNN','LSTM','GRU']:
-    for nL in [2, 3, 5, 10, 15, 20, 25]:
-        model_score(rnn, 'vanilla', None, nL, 100)
-        model_score(rnn, 'residual', None, nL, 100)
-        model_score(rnn, 'highway', None, nL, 100)
-        model_score(rnn, 'highway', 1.0, nL, 100)
+
+for rnn in ['SimpleRnn','LSTM','GRU']:
+    for nL in [2, 3, 5, 10]:
+        eval(rnn, 'vanilla', None, nL, 100)
+        eval(rnn, 'residual', None, nL, 100)
+        eval(rnn, 'highway', None, nL, 100)
+        eval(rnn, 'highway', 1.0, nL, 100)

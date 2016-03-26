@@ -11,6 +11,35 @@ from keras.layers.recurrent import LSTM, GRU, SimpleRNN
 from keras.models import Sequential, Graph, model_from_yaml 
 import sys
 from keras.callbacks import EarlyStopping, ModelCheckpoint
+from keras.optimizers import SGD
+import keras.backend as K
+class GateDense(TimeDistributedDense):
+    def build(self):
+        input_dim = self.input_shape[2]
+
+        self.W = self.init((input_dim, self.output_dim),
+                           name='{}_W'.format(self.name))
+        self.b = K.ones((self.output_dim,), name='{}_b'.format(self.name))
+        #self.b = K.zeros((self.output_dim,), name='{}_b'.format(self.name))
+
+        self.trainable_weights = [self.W, self.b]
+        self.regularizers = []
+
+        if self.W_regularizer:
+            self.W_regularizer.set_param(self.W)
+            self.regularizers.append(self.W_regularizer)
+
+        if self.b_regularizer:
+            self.b_regularizer.set_param(self.b)
+            self.regularizers.append(self.b_regularizer)
+
+        if self.activity_regularizer:
+            self.activity_regularizer.set_layer(self)
+            self.regularizers.append(self.activity_regularizer)
+
+        if self.initial_weights is not None:
+            self.set_weights(self.initial_weights)
+            del self.initial_weights
 
 def fun_speed(inputs):
     from keras.objectives import mean_squared_error as mse
@@ -22,7 +51,7 @@ def fun_highway(inputs):
         if 'orig' in k: f = inputs[k]
         elif 'gate' in k: w = inputs[k]
         else: x = inputs[k]
-    return w * f + (1.0 - w) * x
+    return w * x + (1.0 - w) * f
     
 def fun_residual(inputs):
     k0, k1 = inputs.keys()
@@ -135,7 +164,8 @@ class RestrictedRNN(object):
         # y(x): layer_name
         # y(x) = w(x)*f(x) + (1-w(x))*x
         self.graph.add_node(rnn(self.nH, return_sequences=True), name = 'orig_' + layer_name, input = input_name)
-        self.graph.add_node(TimeDistributedDense(self.nH, activation='sigmoid'), name = 'gate_' + layer_name, input = input_name)
+        #self.graph.add_node(TimeDistributedDense(self.nH, activation='sigmoid'), name = 'gate_' + layer_name, input = input_name)
+        self.graph.add_node(GateDense(self.nH, activation='sigmoid'), name = 'gate_' + layer_name, input = input_name)
         self.graph.add_node(\
             Lambda(fun_highway, output_shape = [self.nT, self.nH]), \
             merge_mode = 'join', name = layer_name, \
@@ -181,6 +211,8 @@ class RestrictedRNN(object):
         self.get_loss_weights()
         
         self.graph.compile(optimizer='adam', loss = self.loss, loss_weights = self.loss_weights)
+        #sgd = SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True)
+        #self.graph.compile(optimizer=sgd, loss = self.loss, loss_weights = self.loss_weights)
         
 
         t_in = self.graph.inputs['input'].get_input()
