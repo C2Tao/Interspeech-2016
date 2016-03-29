@@ -105,9 +105,11 @@ class Label(object):
                 self.label[utt] = int(y)
         
 if __name__=='__main__':
-    ark_path = 'global_phone_feats/train.39.cmvn.ark'
-    label_path = 'global_phone_feats/train_query1_label'
+    ark_path = 'global_phone_feat/Czech_wrd_feats/train.39.cmvn.ark'
+    #label_path = 'global_phone_feat/train_query1_label'
+    label_path = 'global_phone_std/Czech/selected/wrd_corpus/train/train_Czech_query0_label'
+
     ark  = Ark(ark_path)
-    label  = Ark(label_path)
+    label  = Label(label_path)
     
     

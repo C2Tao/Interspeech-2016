@@ -2,13 +2,20 @@ from  highway import RestrictedRNN
 from parser import Ark, Label
 import cPickle
 import numpy as np
+train_ark_path = 'global_phone_feat/Czech_wrd_feats/train.39.cmvn.ark'
+train_label_path = 'global_phone_std/Czech/selected/wrd_corpus/train/train_Czech_query0_label'
+test_ark_path = 'global_phone_feat/Czech_wrd_feats/test.39.cmvn.ark'
+test_label_path = 'global_phone_std/Czech/selected/wrd_corpus/test/test_Czech_query0_label'
+dev_ark_path = 'global_phone_feat/Czech_wrd_feats/dev.39.cmvn.ark'
+dev_label_path = 'global_phone_std/Czech/selected/wrd_corpus/dev/dev_Czech_query0_label'
+'''
 train_ark_path = 'global_phone_feats/train.39.cmvn.ark'
 train_label_path = 'global_phone_feats/train_query1_label'
 test_ark_path = 'global_phone_feats/test.39.cmvn.ark'
 test_label_path = 'global_phone_feats/test_query1_label'
 dev_ark_path = 'global_phone_feats/dev.39.cmvn.ark'
 dev_label_path = 'global_phone_feats/dev_query1_label'
-
+'''
 train_ark = Ark(train_ark_path)
 train_label  = Label(train_label_path)
 train_X, train_y = train_ark.X, train_label.y
@@ -81,14 +88,25 @@ def eval(rnn, con, lim, nN, nH):
 
     pred = cPickle.load(open('score/'+exp_name+'.test','r')).flatten()
     y = test_y 
-    y = pred 
     fpr, tpr, thresholds = metrics.roc_curve(y, pred, pos_label=1)
     auc = metrics.auc(fpr, tpr)
     print auc
 
-for rnn in ['SimpleRNN','LSTM','GRU']:
-    for nL in [2, 3, 5, 10, 15, 20, 25]:
-        model_score(rnn, 'vanilla', None, nL, 100)
-        model_score(rnn, 'residual', None, nL, 100)
-        model_score(rnn, 'highway', None, nL, 100)
-        model_score(rnn, 'highway', 1.0, nL, 100)
+'''
+f = model_score
+for nL in [0, 1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 40, 50]:
+    for rnn in ['SimpleRNN','LSTM','GRU']:
+        print nL, rnn
+        f(rnn, 'vanilla', None, nL, 100)
+        f(rnn, 'residual', None, nL, 100)
+        f(rnn, 'highway', None, nL, 100)
+        f(rnn, 'highway', 1.0, nL, 100)
+'''
+f = model_score
+for nL in [0, 1, 2, 3, 4, 5, 10, 15, 20, 25, 30]:
+    for rnn in ['SimpleRNN','LSTM','GRU']:
+        print nL, rnn
+        f(rnn, 'vanilla', None, nL, 100)
+        f(rnn, 'residual', None, nL, 100)
+        f(rnn, 'highway', None, nL, 100)
+        f(rnn, 'highway', 1.0, nL, 100)
