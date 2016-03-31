@@ -7,6 +7,7 @@ from keras.utils import generic_utils
 import numpy as np
 from keras.layers.core import  Activation, AutoEncoder, Dense, TimeDistributedDense, TimeDistributedMerge, Merge, Lambda
 from keras.layers.recurrent import LSTM, GRU, SimpleRNN
+from keras.layers.recurrent import Highway_LSTM, Highway_GRU, Highway_SimpleRNN
 from keras.models import Sequential, Graph
 def test_sequential():
     model = Sequential()
@@ -29,7 +30,7 @@ def test_lstm():
 
 def test_custom_lstm():
     from keras.layers.recurrent import Highway_LSTM, Highway_GRU, Highway_SimpleRNN
-    from keras.layers.recurrent import Residual_LSTM, Residual_GRU, Residual_SimpleRNN
+    #from keras.layers.recurrent import Residual_LSTM, Residual_GRU, Residual_SimpleRNN
 
     rnn = LSTM
     rnn = GRU
@@ -37,10 +38,10 @@ def test_custom_lstm():
 
     rnn = Highway_LSTM
     rnn = Highway_GRU
-    #rnn = Highway_SimpleRNN
+    rnn = Highway_SimpleRNN
 
-    rnn = Residual_LSTM
-    rnn = Residual_GRU
+    #rnn = Residual_LSTM
+    #rnn = Residual_GRU
     #rnn = Residual_SimpleRNN
 
     model = Sequential()
@@ -161,24 +162,5 @@ def speed_limit():
 
 
 
-def custom_fun(X):
-    from keras.objectives import mean_squared_error as mse
-    print X.keys()
-    return mse(X['proj'], X['lstm'])
 
-graph = Graph()
-graph.add_input(name='input', input_shape=[10, 39])
-graph.add_node(TimeDistributedDense(7), name='proj', input='input')
-
-graph.add_node(LSTM(7, return_sequences=True), name='lstm', input='proj')
-graph.add_node(Lambda(custom_fun, output_shape=[10, 7]), merge_mode = 'join', name = 'diff', inputs=['proj','lstm'])
-graph.add_output(name = 'reconstruction', input='diff')
-
-graph.add_node(TimeDistributedDense(39), name='proj2', input='lstm')
-graph.add_output(name='output', input='proj2')
-
-speed = 0
-X_train = np.random.rand(64, 10, 39)
-zero_vec = np.ones([64, 10]) *speed
-graph.compile(optimizer='rmsprop', loss={'output':'mse', 'reconstruction':'mse'})
-history = graph.fit({'input':X_train, 'output':X_train, 'reconstruction': zero_vec}, nb_epoch=10)
+test_custom_lstm()

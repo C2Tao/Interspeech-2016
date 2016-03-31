@@ -8,6 +8,7 @@ from keras.utils import generic_utils
 import numpy as np
 from keras.layers.core import  Activation, AutoEncoder, Dense, TimeDistributedDense, TimeDistributedMerge, Merge, Lambda
 from keras.layers.recurrent import LSTM, GRU, SimpleRNN
+from keras.layers.recurrent import Highway_LSTM, Highway_GRU, Highway_SimpleRNN
 from keras.models import Sequential, Graph, model_from_yaml 
 import sys
 from keras.callbacks import EarlyStopping, ModelCheckpoint
@@ -95,6 +96,12 @@ class RestrictedRNN(object):
             return GRU
         elif rnn_type == 'SimpleRNN':
             return SimpleRNN
+        elif rnn_type == 'Highway_LSTM':
+            return Highway_LSTM
+        elif rnn_type == 'Highway_GRU':
+            return Highway_GRU
+        elif rnn_type == 'Highway_SimpleRNN':
+            return Highway_SimpleRNN
 
     def add_speed_limit(self, input_name, layer_name, speed_limit = 0.0, speed_fine = 1.0):
         # force outputs of input_name and layer_name to be similar
@@ -146,11 +153,15 @@ class RestrictedRNN(object):
         input_name = self.rnn_layer[-1] 
        
         if connection == 'highway':
-            self.add_highway(input_name, layer_name, rnn)
+            rnn = self.get_rnn('Highway_'+rnn_type)
+            self.add_vanilla(input_name, layer_name, rnn)
         elif connection == 'residual':
             self.add_residual(input_name, layer_name, rnn)
         elif connection == 'vanilla':
             self.add_vanilla(input_name, layer_name, rnn)
+        if connection == 'highway_dnn':
+            self.add_highway(input_name, layer_name, rnn)
+            
         
         self.rnn_layer.append(layer_name)
         self.layer_type[layer_name] = rnn_type

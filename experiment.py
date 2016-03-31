@@ -69,7 +69,7 @@ def score(rnn, con, lim, nN, nH, rrnn = None):
     dump(train_p, 'score/'+exp_name+'.train')
     return rrnn
 
-def model_score(rnn, con, lim, nN, nH):
+def model_score(rnn, con, lim, nN, nH, folder = 'score'):
     exp_name = '_'.join(map(str, (rnn, con, lim, nH, nN)))
     rrnn = compile(rnn, con, lim, nN, nH)
     rrnn.fit((train_X, train_y), (dev_X, dev_y), model_path = 'model/'+exp_name+'.model')
@@ -80,33 +80,77 @@ def model_score(rnn, con, lim, nN, nH):
     dump(dev_p, 'score/'+exp_name+'.dev')
     dump(test_p, 'score/'+exp_name+'.test')
     dump(train_p, 'score/'+exp_name+'.train')
-    
-def eval(rnn, con, lim, nN, nH):
+
+def ap_at_n(answer, score, n):
+    I = np.array(sorted(range(len(answer)), key=lambda x: score[x], reverse=True))
+    sorted_answer = np.array(map(lambda x: float(answer[I[x]]), range(len(answer))))
+    position = np.array(range(len(answer))) + 1
+    ap = np.cumsum(sorted_answer) / position
+    nz = np.nonzero(sorted_answer)[0][:n]
+    mapx = np.mean(ap[nz]) 
+    return ap[n]
+
+def eval(rnn, con, lim, nN, nH, folder='score'):
     exp_name = '_'.join(map(str, (rnn, con, lim, nH, nN)))
     from sklearn import metrics
     import cPickle
 
-    pred = cPickle.load(open('score/'+exp_name+'.test','r')).flatten()
+    pred = cPickle.load(open(folder+'/'+exp_name+'.test','r')).flatten()
     y = test_y 
     fpr, tpr, thresholds = metrics.roc_curve(y, pred, pos_label=1)
     auc = metrics.auc(fpr, tpr)
-    print auc
+
+    from zrst.util import average_precision
+    pred = cPickle.load(open(folder+'/'+exp_name+'.test','r')).flatten()
+    y = test_y 
+    ap = average_precision(y, pred)
+    pa5 = ap_at_n(y, pred, 50)
+    pa10 = ap_at_n(y, pred, 100)
+    #print pa5, pa10, ap, auc
+    print ap
+
+#f = model_score
 
 '''
-f = model_score
-for nL in [0, 1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 40, 50]:
-    for rnn in ['SimpleRNN','LSTM','GRU']:
-        print nL, rnn
-        f(rnn, 'vanilla', None, nL, 100)
-        f(rnn, 'residual', None, nL, 100)
-        f(rnn, 'highway', None, nL, 100)
-        f(rnn, 'highway', 1.0, nL, 100)
-'''
-f = model_score
+f = eval
+nH = 400 
 for nL in [0, 1, 2, 3, 4, 5, 10, 15, 20, 25, 30]:
     for rnn in ['SimpleRNN','LSTM','GRU']:
-        print nL, rnn
-        f(rnn, 'vanilla', None, nL, 100)
-        f(rnn, 'residual', None, nL, 100)
-        f(rnn, 'highway', None, nL, 100)
-        f(rnn, 'highway', 1.0, nL, 100)
+        if rnn=='SimpleRNN': 
+            p = np.sqrt(1.0/2.0)
+            q = np.sqrt(1.0/1.0)
+        elif rnn=='LSTM':  
+            p = np.sqrt(4.0/5.0)
+            q = np.sqrt(1.0/4.0)
+        elif rnn=='GRU':
+            p = np.sqrt(3.0/4.0)
+            q = np.sqrt(1.0/3.0)
+
+        print nL, rnn, int(nH*q), int(nH*q*p)
+        f(rnn, 'vanilla', None, nL, int(nH*q), 'score_400')
+        f(rnn, 'residual', None, nL, int(nH*q), 'score_400')
+        f(rnn, 'highway', None, nL, int(nH*q*p), 'score_400')
+        f(rnn, 'highway', 0.1, nL, int(nH*q*p), 'score_400')
+'''
+#f = model_score
+f = eval
+nH = 100 
+for nL in [20, 15, 10, 5]:
+    for rnn in ['LSTM','GRU','SimpleRNN']:
+        if rnn=='SimpleRNN': 
+            p = np.sqrt(1.0/2.0)
+            q = np.sqrt(1.0/1.0)
+        elif rnn=='LSTM':  
+            p = np.sqrt(4.0/5.0)
+            q = np.sqrt(1.0/4.0)
+        elif rnn=='GRU':
+            p = np.sqrt(3.0/4.0)
+            q = np.sqrt(1.0/3.0)
+
+        print nL, rnn, int(nH*q), int(nH*q*p)
+        f(rnn, 'vanilla', None, nL, int(nH*q))
+        f(rnn, 'residual', None, nL, int(nH*q))
+        f(rnn, 'highway', None, nL, int(nH*q*p))
+        f(rnn, 'highway', 0.1, nL, int(nH*q*p))
+        f(rnn, 'highway', 0.01, nL, int(nH*q*p))
+        f(rnn, 'highway', 0.001, nL, int(nH*q*p))
