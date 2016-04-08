@@ -8,7 +8,7 @@ from keras.utils import generic_utils
 import numpy as np
 from keras.layers.core import  Activation, AutoEncoder, Dense, TimeDistributedDense, TimeDistributedMerge, Merge, Lambda
 from keras.layers.recurrent import LSTM, GRU, SimpleRNN
-from keras.layers.recurrent import Highway_LSTM, Highway_GRU, Highway_SimpleRNN
+from recurrent import Highway_LSTM, Highway_GRU, Highway_SimpleRNN
 from keras.models import Sequential, Graph, model_from_yaml 
 import sys
 from keras.callbacks import EarlyStopping, ModelCheckpoint
