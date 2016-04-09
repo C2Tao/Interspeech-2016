@@ -16,8 +16,6 @@ from keras.optimizers import SGD
 import keras.backend as K
 
 
-def mean_squared_error(y_true, y_pred):
-    return K.mean(K.square(y_pred - y_true), axis=-1)
 
 
 class GateDense(Dense):
@@ -82,6 +80,14 @@ def fun_speed(inputs):
     k0, k1 = inputs.keys()
     return mse(inputs[k0], inputs[k1])
 
+def mean_squared_error(y_true, y_pred):
+    return K.mean(K.square(y_pred - y_true), axis=-1)
+
+def fun_speed_dnn(inputs):
+    from keras.objectives import mean_squared_error as mse
+    k0, k1 = inputs.keys()
+    return K.mean(K.square(inputs[k0] - inputs[k1]), axis=-1)
+
 def fun_highway(inputs):
     for k in inputs.keys():
         if 'orig' in k: f = inputs[k]
@@ -134,9 +140,11 @@ class RestrictedDNN(object):
         # force outputs of input_name and layer_name to be similar
         pair_name = '|'+'-'.join(sorted([input_name, layer_name]))+'|'
         self.graph.add_node(\
-            Lambda(fun_speed, output_shape = [self.nH]),\
+            Lambda(fun_speed_dnn, output_shape = [1]), \
             merge_mode = 'join', name = 'diff_' + pair_name, \
             inputs = [input_name, layer_name])
+        print 'sp in ',self.graph.nodes['diff_'+pair_name].input_shape
+        print 'sp out',self.graph.nodes['diff_'+pair_name].output_shape
         self.graph.add_output(name = pair_name, input='diff_' + pair_name)
         self.restriction.append(pair_name)
         self.speed_limit[pair_name] = speed_limit
@@ -163,6 +171,8 @@ class RestrictedDNN(object):
         
         self.graph.add_node(dnn(self.nH), name = layer_name, input = input_name)
         self.graph.add_node(Dense(1, activation = 'sigmoid'), name = 'final', input = layer_name)
+        print self.graph.nodes['final'].input_shape
+        print self.graph.nodes['final'].output_shape
         self.graph.add_output(name='output', input='final')
         
         self.dnn_layer.append(layer_name)
@@ -198,9 +208,12 @@ class RestrictedDNN(object):
         # w(x): gate_layer_name
         # y(x): layer_name
         # y(x) = w(x)*f(x) + (1-w(x))*x
+        print  self.graph.nodes[input_name].output_shape 
         self.graph.add_node(dnn(self.nH), name = 'orig_' + layer_name, input = input_name)
-        #self.graph.add_node(TimeDistributedDense(self.nH, activation='sigmoid'), name = 'gate_' + layer_name, input = input_name)
         self.graph.add_node(GateDense(self.nH, activation='sigmoid'), name = 'gate_' + layer_name, input = input_name)
+        
+            #Lambda(fun_highway, output_shape = self.graph.nodes[input_name].output_shape), \
+        
         self.graph.add_node(\
             Lambda(fun_highway, output_shape = [self.nH]), \
             merge_mode = 'join', name = layer_name, \
@@ -211,9 +224,11 @@ class RestrictedDNN(object):
         # f(x): dnn_layer_name
         # y(x): layer_name
         # y(x) = f(x) + x
+        print  self.graph.nodes[input_name].output_shape 
         self.graph.add_node(dnn(self.nH), name = 'orig_' + layer_name, input = input_name)
+        
         self.graph.add_node(\
-            Lambda(fun_residual, output_shape = [self.nH]), \
+            Lambda(fun_residual, [self.nH]), \
             merge_mode = 'join', name = layer_name, \
             inputs = [input_name, 'orig_' + layer_name])
 
@@ -221,6 +236,7 @@ class RestrictedDNN(object):
         # x: input_name
         # f(x): layer_name
         # y(x) = f(x)
+        print  self.graph.nodes[input_name].output_shape 
         self.graph.add_node(dnn(self.nH), name = layer_name, input = input_name)
     
     def get_loss(self):
@@ -236,12 +252,11 @@ class RestrictedDNN(object):
         self.loss_weights = loss_weight_dict
  
     def get_xyio(self, xyio_dict, nX):
-        one_vec = np.ones([nX, ])
+        one_vec = np.ones([nX])
         for layer_name in self.restriction:
             xyio_dict[layer_name] = one_vec * self.speed_limit[layer_name]
-        print xyio_dict
-        print xyio_dict.values()[0].shape
-        print xyio_dict.keys()[0]
+        for k in xyio_dict:
+            print k, xyio_dict[k].shape
         return xyio_dict
     
     def compile(self):
@@ -308,218 +323,6 @@ class RestrictedDNN(object):
         #    for line in f: print line.strip()
         self.graph.load_weights(model_path) 
 
-class RestrictedRNN(object):
-    def __init__(self, rnn_type, connection, dimensions):
-            
-        self.rnn_type = rnn_type
-        self.connection = connection
-        
-        self.nT = dimensions['nT'] #10#400
-        self.nF = dimensions['nF'] #39#39
-        self.nH = dimensions['nH'] #7#100
-        
-        self.restriction = []
-        self.speed_limit = {}
-        self.speed_fine = {}
-
-        self.rnn_layer = []
-        self.layer_type = {}
-        self.layer_con = {}
-
-        self.graph = Graph()
-        
-    def get_rnn(self, rnn_type = None):
-        if not rnn_type: rnn_type = self.rnn_type
-        if rnn_type == 'LSTM':
-            return LSTM
-        elif rnn_type == 'GRU':
-            return GRU
-        elif rnn_type == 'SimpleRNN':
-            return SimpleRNN
-        elif rnn_type == 'Highway_LSTM':
-            return Highway_LSTM
-        elif rnn_type == 'Highway_GRU':
-            return Highway_GRU
-        elif rnn_type == 'Highway_SimpleRNN':
-            return Highway_SimpleRNN
-
-    def add_speed_limit(self, input_name, layer_name, speed_limit = 0.0, speed_fine = 1.0):
-        # force outputs of input_name and layer_name to be similar
-        pair_name = '|'+'-'.join(sorted([input_name, layer_name]))+'|'
-        self.graph.add_node(\
-            Lambda(fun_speed, output_shape = [self.nT, self.nH]),\
-            merge_mode = 'join', name = 'diff_' + pair_name, \
-            inputs = [input_name, layer_name])
-        self.graph.add_output(name = pair_name, input='diff_' + pair_name)
-        self.restriction.append(pair_name)
-        self.speed_limit[pair_name] = speed_limit
-        self.speed_fine[pair_name] = speed_fine
-
-    def add_input(self, layer_name = None):
-        if not layer_name:
-            layer_name = '_'.join([str(len(self.rnn_layer)), 'dense', 'input'])
-
-        self.graph.add_input(name='input', input_shape=[self.nT, self.nF])
-        self.graph.add_node(TimeDistributedDense(self.nH), name=layer_name, input='input')
-        
-        self.rnn_layer.append(layer_name)
-        self.layer_type[layer_name] = 'dense'
-        self.layer_con[layer_name] = 'input'
-
-    def add_output(self, layer_name = None, rnn_type = None):
-        if not rnn_type: 
-            rnn_type = self.rnn_type
-        if not layer_name:
-            layer_name = '_'.join([str(len(self.rnn_layer)), rnn_type, 'output'])
-        rnn = self.get_rnn(rnn_type)
-        input_name = self.rnn_layer[-1] 
-        
-        self.graph.add_node(rnn(self.nH, return_sequences=False), name = layer_name, input = input_name)
-        self.graph.add_node(Dense(1, activation = 'sigmoid'), name = 'final', input = layer_name)
-        self.graph.add_output(name='output', input='final')
-        
-        self.rnn_layer.append(layer_name)
-        self.layer_type[layer_name] = self.rnn_type
-        self.layer_con[layer_name] = 'output'
-
-    def add_rnn(self, layer_name = None, rnn_type = None, connection = None):
-        if not connection: 
-            connection = self.connection
-        if not rnn_type: 
-            rnn_type = self.rnn_type
-        if not layer_name:
-            layer_name = '_'.join([str(len(self.rnn_layer)), rnn_type, connection])
-        rnn = self.get_rnn(rnn_type)
-        input_name = self.rnn_layer[-1] 
-       
-        if connection == 'highway':
-            rnn = self.get_rnn('Highway_'+rnn_type)
-            self.add_vanilla(input_name, layer_name, rnn)
-        elif connection == 'residual':
-            self.add_residual(input_name, layer_name, rnn)
-        elif connection == 'vanilla':
-            self.add_vanilla(input_name, layer_name, rnn)
-        if connection == 'highway_dnn':
-            self.add_highway(input_name, layer_name, rnn)
-            
-        
-        self.rnn_layer.append(layer_name)
-        self.layer_type[layer_name] = rnn_type
-        self.layer_con[layer_name] = connection
-         
-        
-    def add_highway(self,  input_name, layer_name, rnn):
-        # x: input_name
-        # f(x): rnn_layer_name
-        # w(x): gate_layer_name
-        # y(x): layer_name
-        # y(x) = w(x)*f(x) + (1-w(x))*x
-        self.graph.add_node(rnn(self.nH, return_sequences=True), name = 'orig_' + layer_name, input = input_name)
-        #self.graph.add_node(TimeDistributedDense(self.nH, activation='sigmoid'), name = 'gate_' + layer_name, input = input_name)
-        self.graph.add_node(GateTimeDistributedDense(self.nH, activation='sigmoid'), name = 'gate_' + layer_name, input = input_name)
-        self.graph.add_node(\
-            Lambda(fun_highway, output_shape = [self.nT, self.nH]), \
-            merge_mode = 'join', name = layer_name, \
-            inputs = [input_name, 'orig_' + layer_name, 'gate_' + layer_name])
-
-    def add_residual(self, input_name, layer_name, rnn):
-        # x: input_name
-        # f(x): rnn_layer_name
-        # y(x): layer_name
-        # y(x) = f(x) + x
-        self.graph.add_node(rnn(self.nH, return_sequences=True), name = 'orig_' + layer_name, input = input_name)
-        self.graph.add_node(\
-            Lambda(fun_residual, output_shape = [self.nT, self.nH]), \
-            merge_mode = 'join', name = layer_name, \
-            inputs = [input_name, 'orig_' + layer_name])
-
-    def add_vanilla(self, input_name, layer_name, rnn):
-        # x: input_name
-        # f(x): layer_name
-        # y(x) = f(x)
-        self.graph.add_node(rnn(self.nH, return_sequences=True), name = layer_name, input = input_name)
-    
-    def get_loss(self):
-        loss_dict = {'output': 'binary_crossentropy'}
-        for layer_name in self.restriction:
-            loss_dict[layer_name] = 'mse'
-        self.loss = loss_dict
-        
-    def get_loss_weights(self):
-        loss_weight_dict = {'output': 1.0}
-        for layer_name in self.restriction:
-            loss_weight_dict[layer_name] = self.speed_fine[layer_name]
-        self.loss_weights = loss_weight_dict
- 
-    def get_xyio(self, xyio_dict, nX):
-        one_vec = np.ones([nX, self.nT])
-        for layer_name in self.restriction:
-            xyio_dict[layer_name] = one_vec * self.speed_limit[layer_name]
-        return xyio_dict
-    
-    def compile(self):
-        self.get_loss()
-        self.get_loss_weights()
-        
-        self.graph.compile(optimizer='adam', loss = self.loss, loss_weights = self.loss_weights)
-        #sgd = SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True)
-        #self.graph.compile(optimizer=sgd, loss = self.loss, loss_weights = self.loss_weights)
-        
-
-        t_in = self.graph.inputs['input'].get_input()
-        t_out = self.graph.outputs['output'].get_output()
-        self.evaluate = theano.function([t_in], t_out, allow_input_downcast=True)
-        
-        self.print_graph()
-
-    
-    def print_graph(self, info_path=None):
-        if info_path:
-            sys_out = sys.stdout
-            sys.stdout = Logger(info_path)
-        print "=========================================="
-        print "graph inputs:"
-        print '    ', self.graph.inputs.keys()
-
-        print "graph rnn_nodes:"
-        #print [k for k in self.graph.nodes.keys() if not('diff' in k or 'orig' in k or '|' in k or 'gate' in k)]
-        for k in self.rnn_layer:
-            print '    ', k, self.layer_type[k], self.layer_con[k]
-        
-        print "graph speed_limits:"
-        print '    ', [k for k in self.graph.nodes.keys() if 'diff' in k]
-        
-        print "graph outputs:"
-        print '    ', self.graph.outputs.keys()
-
-        print "objecives error:"
-        print '    ', self.loss
-
-        print "objecives weights:"
-        print '    ', self.loss_weights
-        print "=========================================="
-        if info_path:
-            sys.stdout = sys_out
-
-    def fit(self, train_Xy, val_Xy, nb_epoch = 100, patience = 5, model_path='model/tmp'):
-        X, y = train_Xy
-        vX, vy = val_Xy
-
-        early_stopping = EarlyStopping(monitor='val_loss', patience=patience)
-        model_checkpoint = ModelCheckpoint(filepath=model_path, save_best_only=True, verbose=1)
-
-        xyio_dict = self.get_xyio({'input':X, 'output':y}, X.shape[0])
-        xyval_dict = self.get_xyio({'input':vX, 'output':vy}, vX.shape[0])
-        self.history = self.graph.fit(xyio_dict, validation_data = xyval_dict, nb_epoch=nb_epoch, callbacks=[model_checkpoint, early_stopping])
-    
-    def save(self, model_path):
-        self.print_graph(model_path+'.txt')
-        self.graph.save_weights(model_path)
-        
-    def load(self, model_path):
-        #with open(model_path+'.txt','r') as f:
-        #    for line in f: print line.strip()
-        self.graph.load_weights(model_path) 
 
 
 if __name__=='__main__':
@@ -542,8 +345,8 @@ if __name__=='__main__':
     rdnn.add_output() 
     
     rdnn.add_speed_limit('proj', 'dnn4', speed_limit = 0, speed_fine =1)
-    rdnn.add_speed_limit('dnn1', 'dnn2', speed_fine = -1)
-    rdnn.add_speed_limit('dnn2', 'dnn3' )
+    #rdnn.add_speed_limit('dnn1', 'dnn2', speed_fine = -1)
+    #rdnn.add_speed_limit('dnn2', 'dnn3' )
     
     rdnn.compile()
     rdnn.fit((X_train, y_train),(X_val, y_val), 100, 5)
