@@ -7,7 +7,7 @@ from keras.utils import generic_utils
 import numpy as np
 from keras.layers.core import  Activation, AutoEncoder, Dense, TimeDistributedDense, TimeDistributedMerge, Merge, Lambda
 from keras.layers.recurrent import LSTM, GRU, SimpleRNN
-from keras.layers.recurrent import Highway_LSTM, Highway_GRU, Highway_SimpleRNN
+#from keras.layers.recurrent import Highway_LSTM, Highway_GRU, Highway_SimpleRNN
 from keras.models import Sequential, Graph
 def test_sequential():
     model = Sequential()
@@ -159,8 +159,34 @@ def speed_limit():
     graph.compile(optimizer='rmsprop', loss={'output':'mse', 'reconstruction':'mse'})
     history = graph.fit({'input':X_train, 'output':X_train, 'reconstruction': zero_vec}, nb_epoch=10)
 
+def shared_weights():
+    shared_dense = Dense(32, name='dense', input_dim=18)
+    ext_dense = Dense(32, name = 'ext_dense')
 
+    print shared_dense
 
+    graph = Graph()
+    graph.add_input(name='input', input_shape=(32,))
+    graph.add_node(Dense(18), name='dense1', input='input')
+    graph.add_node(Dense(18), name='dense2', input='input')
 
+    #graph.add_node(Dense(2), name='shared1', input='dense1')
+    #graph.add_node(Dense(2), name='shared2', input='dense2')
 
-test_custom_lstm()
+    #graph.add_node(ext_dense, name='shared1', input='dense1')
+    #graph.add_node(Dense(2), name='shared2', input='dense2')
+
+    graph.add_node(Dense(32, weights = shared_dense.trainable_weights), name='shared1', input='dense1')
+    graph.add_node(Dense(32, weights = shared_dense.trainable_weights), name='shared2', input='dense2')
+
+    graph.add_node(Dense(32), name='dense3', input='shared1')
+    graph.add_node(Dense(32), name='dense4', input='shared2')
+
+    graph.add_output(name='output1', input='dense3')
+    graph.add_output(name='output2', input='dense4')
+
+    graph.compile(optimizer='rmsprop', loss={'output1':'mse', 'output2':'mse'})
+
+    X_train = np.random.rand(64, 32)
+    history = graph.fit({'input':X_train, 'output1':X_train, 'output2':X_train}, nb_epoch=10)
+shared_weights()
