@@ -107,7 +107,7 @@ class RestrictedRNN(object):
         # force outputs of input_name and layer_name to be similar
         pair_name = '|'+'-'.join(sorted([input_name, layer_name]))+'|'
         self.graph.add_node(\
-            Lambda(fun_speed, output_shape = [self.nT, self.nH]),\
+            Lambda(fun_speed, output_shape = [self.nT]),\
             merge_mode = 'join', name = 'diff_' + pair_name, \
             inputs = [input_name, layer_name])
         self.graph.add_output(name = pair_name, input='diff_' + pair_name)
