@@ -68,7 +68,7 @@ class Logger(object):
         self.terminal.write(message)
         self.log.write(message)  
 
-class RestrictedRNN(object):
+class HRNN(object):
     def __init__(self, rnn_type, connection, dimensions):
             
         self.rnn_type = rnn_type
@@ -77,6 +77,7 @@ class RestrictedRNN(object):
         self.nT = dimensions['nT'] #10#400
         self.nF = dimensions['nF'] #39#39
         self.nH = dimensions['nH'] #7#100
+        self.nY = 1 if 'nY' not in dimensions else dimensions['nY'] #7#100
         
         self.restriction = []
         self.speed_limit = {}
@@ -86,6 +87,7 @@ class RestrictedRNN(object):
         self.layer_type = {}
         self.layer_con = {}
 
+        self.visualize = {}
         self.graph = Graph()
         
     def get_rnn(self, rnn_type = None):
@@ -134,8 +136,8 @@ class RestrictedRNN(object):
         rnn = self.get_rnn(rnn_type)
         input_name = self.rnn_layer[-1] 
         
-        self.graph.add_node(rnn(self.nH, return_sequences=False), name = layer_name, input = input_name)
-        self.graph.add_node(Dense(1, activation = 'sigmoid'), name = 'final', input = layer_name)
+        self.graph.add_node(rnn(4, return_sequences=False), name = layer_name, input = input_name)
+        self.graph.add_node(Dense(self.nY, activation = 'sigmoid'), name = 'final', input = layer_name)
         self.graph.add_output(name='output', input='final')
         
         self.rnn_layer.append(layer_name)
@@ -200,7 +202,10 @@ class RestrictedRNN(object):
         self.graph.add_node(rnn(self.nH, return_sequences=True), name = layer_name, input = input_name)
     
     def get_loss(self):
-        loss_dict = {'output': 'binary_crossentropy'}
+        if self.nY==1:
+            loss_dict = {'output': 'binary_crossentropy'}
+        else:
+            loss_dict = {'output': 'categorical_crossentropy'}
         for layer_name in self.restriction:
             loss_dict[layer_name] = 'mse'
         self.loss = loss_dict
@@ -228,6 +233,9 @@ class RestrictedRNN(object):
 
         t_in = self.graph.inputs['input'].get_input()
         t_out = self.graph.outputs['output'].get_output()
+        for layer_name in self.rnn_layer:
+            t = self.graph.nodes[layer_name].get_output()
+            self.visualize[layer_name] = theano.function([t_in], t, allow_input_downcast=True)
         self.evaluate = theano.function([t_in], t_out, allow_input_downcast=True)
         
         self.print_graph()
@@ -292,7 +300,7 @@ if __name__=='__main__':
     X_val = np.random.rand(nV, dim['nT'], dim['nF'])
     y_val = np.random.randint(2, size = (nV,) )
     
-    rrnn = RestrictedRNN('LSTM', 'highway', dim) 
+    rrnn = HRNN('LSTM', 'highway', dim) 
     
     rrnn.add_input('proj')
     rrnn.add_rnn('lstm1', 'LSTM', 'highway')

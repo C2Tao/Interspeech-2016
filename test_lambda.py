@@ -11,9 +11,9 @@ from keras.models import Sequential, Graph
 
 
 n_raw_dim = 39
-n_max_dur = 400#10
-n_feat_dim = 100#7
-n_batch_size = 5000#64
+n_max_dur = 10#10
+n_feat_dim = 7#7
+n_batch_size = 64#64
 
 loss = []
 
@@ -50,8 +50,9 @@ def fun_residual(inputs):
 def add_speed_limit(graph, input_name, layer_name):
     # force outputs of input_name and layer_name to be similar
     pair_name = '|'+'-'.join(sorted([input_name, layer_name]))+'|'
+        #Lambda(fun_speed, output_shape = [n_max_dur, n_feat_dim]),\
     graph.add_node(\
-        Lambda(fun_speed, output_shape = [n_max_dur, n_feat_dim]),\
+        Lambda(fun_speed, output_shape = None),\
         merge_mode = 'join', name = 'diff_' + pair_name, \
         inputs = [input_name, layer_name])
     graph.add_output(name = 'speed_' + pair_name, input='diff_' + pair_name)
